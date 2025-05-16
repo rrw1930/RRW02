@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>完整3D几何体演示</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #666;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .control-panel {
+            flex: 0 0 200px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .demo-area {
+            flex: 1;
+            height: 80vh;
+            min-height: 600px;
+            background: #444;
+            border-radius: 12px;
+            perspective: 2000px;
+            overflow: visible;
+        }
+
+        .shape-container {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform-style: preserve-3d;
+            transform: translate(-50%, -50%) rotateX(-35deg) rotateY(45deg);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .face {
+            position: absolute;
+            border: 2px solid rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            backface-visibility: visible;
+            opacity: 0.95;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+
+        /* 正方体配置 */
+        #cube .front  { transform: translateZ(100px); width: 200px; height: 200px; background: #FF6B6B; }
+        #cube .back   { transform: rotateY(180deg) translateZ(100px); background: #4ECDC4; }
+        #cube .right  { transform: rotateY(90deg) translateZ(100px); background: #45B7D1; }
+        #cube .left   { transform: rotateY(-90deg) translateZ(100px); background: #96CEB4; }
+        #cube .top    { transform: rotateX(90deg) translateZ(100px); background: #FFEEAD; }
+        #cube .bottom { transform: rotateX(-90deg) translateZ(100px); background: #D4A5A5; }
+
+        /* 长方体配置 */
+        #cuboid .front  { transform: translateZ(80px); width: 240px; height: 160px; background: #FF6B6B; }
+        #cuboid .back   { transform: rotateY(180deg) translateZ(80px); }
+        #cuboid .right  { transform: rotateY(90deg) translateZ(120px); width: 160px; height: 160px; }
+        #cuboid .left   { transform: rotateY(-90deg) translateZ(120px); }
+        #cuboid .top    { transform: rotateX(90deg) translateZ(80px); width: 240px; height: 120px; }
+        #cuboid .bottom { transform: rotateX(-90deg) translateZ(80px); }
+
+        /* 四棱锥配置 */
+        #pyramid .base  { transform: rotateX(90deg) translateZ(120px); width: 200px; height: 200px; background: #FF6B6B; }
+        #pyramid .front { transform: rotateX(-60deg) translateZ(100px) translateY(80px); width: 200px; height: 300px; background: #4ECDC4; }
+        #pyramid .back  { transform: rotateX(60deg) translateZ(100px) translateY(80px); }
+        #pyramid .left  { transform: rotateY(60deg) translateZ(100px) translateY(80px); }
+        #pyramid .right { transform: rotateY(-60deg) translateZ(100px) translateY(80px); }
+
+        select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            background: #357ABD;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="color:#fff; margin:0 0 20px;">3D几何体完整演示</h1>
+    
+    <div class="main-container">
+        <div class="control-panel">
+            <select id="shapeSelector" onchange="changeShape(this.value)">
+                <option value="cube">正方体</option>
+                <option value="cuboid">长方体</option>
+                <option value="pyramid">四棱锥</option>
+            </select>
+            <button onclick="toggleAnimation()">拆解/组合</button>
+            <button onclick="autoRotate()">自动旋转</button>
+            <button onclick="resetView()">重置视图</button>
+        </div>
+
+        <div class="demo-area">
+            <div class="shape-container" id="cube">
+                <div class="face front">前</div>
+                <div class="face back">后</div>
+                <div class="face left">左</div>
+                <div class="face right">右</div>
+                <div class="face top">上</div>
+                <div class="face bottom">下</div>
+            </div>
+
+            <div class="shape-container" id="cuboid" style="display:none;">
+                <div class="face front">前</div>
+                <div class="face back">后</div>
+                <div class="face left">左</div>
+                <div class="face right">右</div>
+                <div class="face top">上</div>
+                <div class="face bottom">下</div>
+            </div>
+
+            <div class="shape-container" id="pyramid" style="display:none;">
+                <div class="face base">底</div>
+                <div class="face front">前</div>
+                <div class="face back">后</div>
+                <div class="face left">左</div>
+                <div class="face right">右</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let currentShape = 'cube';
+let isRotating = false;
+let rotation = { x: -35, y: 45 };
+const originalTransforms = new Map();
+
+// 初始化几何体变换
+function initShapes() {
+    document.querySelectorAll('.face').forEach(face => {
+        originalTransforms.set(face, face.style.transform);
+    });
+}
+
+// 拆解/组合功能
+function toggleAnimation() {
+    const container = document.getElementById(currentShape);
+    const isAssembled = container.dataset.state !== 'disassembled';
+    
+    Array.from(container.children).forEach(face => {
+        if (isAssembled) {
+            const randomX = (Math.random() - 0.5) * 600;
+            const randomY = (Math.random() - 0.5) * 400;
+            const randomZ = (Math.random() - 0.5) * 300;
+            face.style.transform = `${originalTransforms.get(face)} translate3d(${randomX}px, ${randomY}px, ${randomZ}px)`;
+        } else {
+            face.style.transform = originalTransforms.get(face);
+        }
+    });
+    
+    container.dataset.state = isAssembled ? 'disassembled' : 'assembled';
+}
+
+// 自动旋转
+function autoRotate() {
+    isRotating = !isRotating;
+    const container = document.getElementById(currentShape);
+    
+    function animate() {
+        if (!isRotating) return;
+        rotation.y += 0.5;
+        container.style.transform = 
+            `translate(-50%, -50%) 
+             rotateX(${rotation.x}deg) 
+             rotateY(${rotation.y}deg)`;
+        requestAnimationFrame(animate);
+    }
+    animate();
+}
+
+// 重置视图
+function resetView() {
+    isRotating = false;
+    rotation = { x: -35, y: 45 };
+    document.getElementById(currentShape).style.transform = 
+        `translate(-50%, -50%) 
+         rotateX(${rotation.x}deg) 
+         rotateY(${rotation.y}deg)`;
+}
+
+// 切换形状
+function changeShape(shape) {
+    currentShape = shape;
+    document.querySelectorAll('.shape-container').forEach(el => {
+        el.style.display = 'none';
+        el.dataset.state = 'assembled';
+    });
+    document.getElementById(shape).style.display = 'block';
+    resetView();
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+    initShapes();
+    
+    // 添加鼠标控制
+    const demoArea = document.querySelector('.demo-area');
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    
+    demoArea.addEventListener('mousedown', e => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+    
+    demoArea.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        rotation.y += deltaX * 0.5;
+        rotation.x -= deltaY * 0.5;
+        document.getElementById(currentShape).style.transform = 
+            `translate(-50%, -50%) 
+             rotateX(${rotation.x}deg) 
+             rotateY(${rotation.y}deg)`;
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+    
+    demoArea.addEventListener('mouseup', () => isDragging = false);
+    demoArea.addEventListener('mouseleave', () => isDragging = false);
+    
+    resetView();
+});
+</script>
+</body>
+</html>
